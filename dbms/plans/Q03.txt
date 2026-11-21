@@ -1,0 +1,74 @@
+Q03 — Run 3
+
+Query:
+SELECT t.trade_id, t.execution_price, t.quantity, t.executed_at,
+       bu.display_name AS buyer, su.display_name AS seller
+FROM trades AS t
+JOIN orders AS bo ON bo.order_id = t.buy_order_id
+JOIN users AS bu ON bu.user_id = bo.user_id
+JOIN orders AS so ON so.order_id = t.sell_order_id
+JOIN users AS su ON su.user_id = so.user_id
+JOIN instruments AS i ON i.instrument_id = bo.instrument_id
+WHERE i.symbol = 'TRC'
+  AND t.executed_at >= TIMESTAMPTZ '2026-01-01 00:00:00+00'
+ORDER BY t.executed_at DESC
+LIMIT 100
+
+Plan (EXPLAIN ANALYZE, BUFFERS, VERBOSE):
+Limit  (cost=1.42..1068.14 rows=100 width=46) (actual time=0.033..1.232 rows=100 loops=1)
+  Output: t.trade_id, t.execution_price, t.quantity, t.executed_at, bu.display_name, su.display_name
+  Buffers: shared hit=6930
+  ->  Nested Loop  (cost=1.42..10668.60 rows=1000 width=46) (actual time=0.032..1.229 rows=100 loops=1)
+        Output: t.trade_id, t.execution_price, t.quantity, t.executed_at, bu.display_name, su.display_name
+        Inner Unique: true
+        Buffers: shared hit=6930
+        ->  Nested Loop  (cost=1.14..10374.52 rows=1000 width=44) (actual time=0.030..1.189 rows=100 loops=1)
+              Output: t.trade_id, t.execution_price, t.quantity, t.executed_at, bu.display_name, so.user_id
+              Inner Unique: true
+              Buffers: shared hit=6630
+              ->  Nested Loop  (cost=0.85..9953.62 rows=1000 width=44) (actual time=0.028..1.107 rows=100 loops=1)
+                    Output: t.trade_id, t.execution_price, t.quantity, t.executed_at, t.sell_order_id, bu.display_name
+                    Inner Unique: true
+                    Buffers: shared hit=6330
+                    ->  Nested Loop  (cost=0.58..9659.54 rows=1000 width=42) (actual time=0.025..1.051 rows=100 loops=1)
+                          Output: t.trade_id, t.execution_price, t.quantity, t.executed_at, t.sell_order_id, bo.user_id
+                          Inner Unique: true
+                          Join Filter: (bo.instrument_id = i.instrument_id)
+                          Rows Removed by Join Filter: 1900
+                          Buffers: shared hit=6030
+                          ->  Nested Loop  (cost=0.58..9358.29 rows=20000 width=50) (actual time=0.010..0.869 rows=2000 loops=1)
+                                Output: t.trade_id, t.execution_price, t.quantity, t.executed_at, t.sell_order_id, bo.user_id, bo.instrument_id
+                                Inner Unique: true
+                                Buffers: shared hit=6029
+                                ->  Index Scan using trades_executed_at_idx on public.trades t  (cost=0.29..940.29 rows=20000 width=42) (actual time=0.006..0.106 rows=2000 loops=1)
+                                      Output: t.trade_id, t.buy_order_id, t.sell_order_id, t.execution_price, t.quantity, t.executed_at
+                                      Index Cond: (t.executed_at >= '2026-01-01 05:30:00+05:30'::timestamp with time zone)
+                                      Buffers: shared hit=29
+                                ->  Index Scan using orders_pkey on public.orders bo  (cost=0.29..0.42 rows=1 width=24) (actual time=0.000..0.000 rows=1 loops=2000)
+                                      Output: bo.order_id, bo.user_id, bo.instrument_id, bo.side, bo.limit_price, bo.original_quantity, bo.status, bo.created_at, bo.cancelled_at
+                                      Index Cond: (bo.order_id = t.buy_order_id)
+                                      Buffers: shared hit=6000
+                          ->  Materialize  (cost=0.00..1.25 rows=1 width=8) (actual time=0.000..0.000 rows=1 loops=2000)
+                                Output: i.instrument_id
+                                Buffers: shared hit=1
+                                ->  Seq Scan on public.instruments i  (cost=0.00..1.25 rows=1 width=8) (actual time=0.003..0.003 rows=1 loops=1)
+                                      Output: i.instrument_id
+                                      Filter: (i.symbol = 'TRC'::text)
+                                      Rows Removed by Filter: 19
+                                      Buffers: shared hit=1
+                    ->  Index Scan using users_pkey on public.users bu  (cost=0.28..0.29 rows=1 width=18) (actual time=0.000..0.000 rows=1 loops=100)
+                          Output: bu.user_id, bu.email, bu.display_name, bu.created_at
+                          Index Cond: (bu.user_id = bo.user_id)
+                          Buffers: shared hit=300
+              ->  Index Scan using orders_pkey on public.orders so  (cost=0.29..0.42 rows=1 width=16) (actual time=0.001..0.001 rows=1 loops=100)
+                    Output: so.order_id, so.user_id, so.instrument_id, so.side, so.limit_price, so.original_quantity, so.status, so.created_at, so.cancelled_at
+                    Index Cond: (so.order_id = t.sell_order_id)
+                    Buffers: shared hit=300
+        ->  Index Scan using users_pkey on public.users su  (cost=0.28..0.29 rows=1 width=18) (actual time=0.000..0.000 rows=1 loops=100)
+              Output: su.user_id, su.email, su.display_name, su.created_at
+              Index Cond: (su.user_id = so.user_id)
+              Buffers: shared hit=300
+Planning:
+  Buffers: shared hit=437
+Planning Time: 0.969 ms
+Execution Time: 1.257 ms

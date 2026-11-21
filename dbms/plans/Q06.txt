@@ -1,0 +1,50 @@
+Q06 — Run 3
+
+Query:
+SELECT u.email, sum(t.quantity) AS filled_quantity,
+       sum(t.quantity * t.execution_price) AS notional_value
+FROM users AS u
+JOIN orders AS o ON o.user_id = u.user_id
+JOIN trades AS t ON t.buy_order_id = o.order_id OR t.sell_order_id = o.order_id
+WHERE u.email = 'trader-0042@example.com'
+GROUP BY u.email
+
+Plan (EXPLAIN ANALYZE, BUFFERS, VERBOSE):
+GroupAggregate  (cost=5.48..321.95 rows=1 width=88) (actual time=0.169..0.169 rows=1 loops=1)
+  Output: u.email, sum(t.quantity), sum((t.quantity * t.execution_price))
+  Buffers: shared hit=245
+  ->  Nested Loop  (cost=5.48..321.63 rows=40 width=34) (actual time=0.020..0.160 rows=40 loops=1)
+        Output: u.email, t.quantity, t.execution_price
+        Buffers: shared hit=245
+        ->  Nested Loop  (cost=4.88..135.54 rows=40 width=32) (actual time=0.014..0.053 rows=40 loops=1)
+              Output: u.email, o.order_id
+              Buffers: shared hit=45
+              ->  Index Scan using users_email_key on public.users u  (cost=0.28..8.29 rows=1 width=32) (actual time=0.005..0.006 rows=1 loops=1)
+                    Output: u.user_id, u.email, u.display_name, u.created_at
+                    Index Cond: (u.email = 'trader-0042@example.com'::text)
+                    Buffers: shared hit=3
+              ->  Bitmap Heap Scan on public.orders o  (cost=4.60..126.85 rows=40 width=16) (actual time=0.008..0.045 rows=40 loops=1)
+                    Output: o.order_id, o.user_id, o.instrument_id, o.side, o.limit_price, o.original_quantity, o.status, o.created_at, o.cancelled_at
+                    Recheck Cond: (u.user_id = o.user_id)
+                    Heap Blocks: exact=40
+                    Buffers: shared hit=42
+                    ->  Bitmap Index Scan on orders_user_created_idx  (cost=0.00..4.59 rows=40 width=0) (actual time=0.004..0.004 rows=40 loops=1)
+                          Index Cond: (o.user_id = u.user_id)
+                          Buffers: shared hit=2
+        ->  Bitmap Heap Scan on public.trades t  (cost=0.60..4.63 rows=2 width=26) (actual time=0.002..0.002 rows=1 loops=40)
+              Output: t.trade_id, t.buy_order_id, t.sell_order_id, t.execution_price, t.quantity, t.executed_at
+              Recheck Cond: ((t.buy_order_id = o.order_id) OR (t.sell_order_id = o.order_id))
+              Heap Blocks: exact=40
+              Buffers: shared hit=200
+              ->  BitmapOr  (cost=0.60..0.60 rows=2 width=0) (actual time=0.002..0.002 rows=0 loops=40)
+                    Buffers: shared hit=160
+                    ->  Bitmap Index Scan on trades_buy_order_idx  (cost=0.00..0.30 rows=1 width=0) (actual time=0.001..0.001 rows=0 loops=40)
+                          Index Cond: (t.buy_order_id = o.order_id)
+                          Buffers: shared hit=80
+                    ->  Bitmap Index Scan on trades_sell_order_idx  (cost=0.00..0.30 rows=1 width=0) (actual time=0.001..0.001 rows=0 loops=40)
+                          Index Cond: (t.sell_order_id = o.order_id)
+                          Buffers: shared hit=80
+Planning:
+  Buffers: shared hit=355
+Planning Time: 0.445 ms
+Execution Time: 0.195 ms

@@ -1,0 +1,44 @@
+Q04 — Run 3
+
+Query:
+SELECT i.symbol, i.display_name, p.quantity, p.average_cost,
+       p.quantity * p.average_cost AS cost_basis
+FROM positions AS p
+JOIN users AS u ON u.user_id = p.user_id
+JOIN instruments AS i ON i.instrument_id = p.instrument_id
+WHERE u.email = 'trader-0042@example.com'
+ORDER BY i.symbol
+
+Plan (EXPLAIN ANALYZE, BUFFERS, VERBOSE):
+Sort  (cost=50.63..50.68 rows=20 width=59) (actual time=0.037..0.038 rows=20 loops=1)
+  Output: i.symbol, i.display_name, p.quantity, p.average_cost, ((p.quantity * p.average_cost))
+  Sort Key: i.symbol
+  Sort Method: quicksort  Memory: 26kB
+  Buffers: shared hit=10
+  ->  Hash Join  (cost=2.01..50.19 rows=20 width=59) (actual time=0.022..0.026 rows=20 loops=1)
+        Output: i.symbol, i.display_name, p.quantity, p.average_cost, (p.quantity * p.average_cost)
+        Inner Unique: true
+        Hash Cond: (p.instrument_id = i.instrument_id)
+        Buffers: shared hit=7
+        ->  Nested Loop  (cost=0.56..48.63 rows=20 width=17) (actual time=0.010..0.011 rows=20 loops=1)
+              Output: p.quantity, p.average_cost, p.instrument_id
+              Buffers: shared hit=6
+              ->  Index Scan using users_email_key on public.users u  (cost=0.28..8.29 rows=1 width=8) (actual time=0.003..0.004 rows=1 loops=1)
+                    Output: u.user_id, u.email, u.display_name, u.created_at
+                    Index Cond: (u.email = 'trader-0042@example.com'::text)
+                    Buffers: shared hit=3
+              ->  Index Scan using positions_pkey on public.positions p  (cost=0.29..40.14 rows=20 width=25) (actual time=0.005..0.006 rows=20 loops=1)
+                    Output: p.user_id, p.instrument_id, p.quantity, p.average_cost, p.updated_at
+                    Index Cond: (p.user_id = u.user_id)
+                    Buffers: shared hit=3
+        ->  Hash  (cost=1.20..1.20 rows=20 width=26) (actual time=0.007..0.007 rows=20 loops=1)
+              Output: i.symbol, i.display_name, i.instrument_id
+              Buckets: 1024  Batches: 1  Memory Usage: 10kB
+              Buffers: shared hit=1
+              ->  Seq Scan on public.instruments i  (cost=0.00..1.20 rows=20 width=26) (actual time=0.002..0.002 rows=20 loops=1)
+                    Output: i.symbol, i.display_name, i.instrument_id
+                    Buffers: shared hit=1
+Planning:
+  Buffers: shared hit=273
+Planning Time: 0.393 ms
+Execution Time: 0.063 ms

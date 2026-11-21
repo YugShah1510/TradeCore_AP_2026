@@ -1,0 +1,51 @@
+Q05 — Run 3
+
+Query:
+SELECT i.symbol, date_trunc('day', t.executed_at) AS trading_day,
+       count(*) AS trade_count, sum(t.quantity) AS volume,
+       avg(t.execution_price) AS average_price
+FROM trades AS t
+JOIN orders AS o ON o.order_id = t.buy_order_id
+JOIN instruments AS i ON i.instrument_id = o.instrument_id
+WHERE t.executed_at >= TIMESTAMPTZ '2026-11-01 00:00:00+00'
+GROUP BY i.symbol, date_trunc('day', t.executed_at)
+ORDER BY trading_day DESC, i.symbol
+
+Plan (EXPLAIN ANALYZE, BUFFERS, VERBOSE):
+GroupAggregate  (cost=3366.23..4016.23 rows=20000 width=85) (actual time=7.900..9.575 rows=300 loops=1)
+  Output: i.symbol, (date_trunc('day'::text, t.executed_at)), count(*), sum(t.quantity), avg(t.execution_price)
+  Group Key: (date_trunc('day'::text, t.executed_at)), i.symbol
+  Buffers: shared hit=534
+  ->  Sort  (cost=3366.23..3416.23 rows=20000 width=23) (actual time=7.892..8.234 rows=20000 loops=1)
+        Output: i.symbol, (date_trunc('day'::text, t.executed_at)), t.quantity, t.execution_price
+        Sort Key: (date_trunc('day'::text, t.executed_at)) DESC, i.symbol
+        Sort Method: quicksort  Memory: 1706kB
+        Buffers: shared hit=534
+        ->  Hash Join  (cost=2.03..1937.46 rows=20000 width=23) (actual time=0.020..6.033 rows=20000 loops=1)
+              Output: i.symbol, date_trunc('day'::text, t.executed_at), t.quantity, t.execution_price
+              Inner Unique: true
+              Hash Cond: (o.instrument_id = i.instrument_id)
+              Buffers: shared hit=528
+              ->  Merge Join  (cost=0.58..1822.38 rows=20000 width=26) (actual time=0.008..3.909 rows=20000 loops=1)
+                    Output: t.executed_at, t.quantity, t.execution_price, o.instrument_id
+                    Inner Unique: true
+                    Merge Cond: (t.buy_order_id = o.order_id)
+                    Buffers: shared hit=527
+                    ->  Index Scan using trades_buy_order_idx on public.trades t  (cost=0.29..768.29 rows=20000 width=26) (actual time=0.003..1.310 rows=20000 loops=1)
+                          Output: t.trade_id, t.buy_order_id, t.sell_order_id, t.execution_price, t.quantity, t.executed_at
+                          Filter: (t.executed_at >= '2026-11-01 05:30:00+05:30'::timestamp with time zone)
+                          Buffers: shared hit=243
+                    ->  Index Scan using orders_pkey on public.orders o  (cost=0.29..1506.29 rows=40000 width=16) (actual time=0.004..1.022 rows=20000 loops=1)
+                          Output: o.order_id, o.user_id, o.instrument_id, o.side, o.limit_price, o.original_quantity, o.status, o.created_at, o.cancelled_at
+                          Buffers: shared hit=284
+              ->  Hash  (cost=1.20..1.20 rows=20 width=13) (actual time=0.005..0.005 rows=20 loops=1)
+                    Output: i.symbol, i.instrument_id
+                    Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                    Buffers: shared hit=1
+                    ->  Seq Scan on public.instruments i  (cost=0.00..1.20 rows=20 width=13) (actual time=0.001..0.002 rows=20 loops=1)
+                          Output: i.symbol, i.instrument_id
+                          Buffers: shared hit=1
+Planning:
+  Buffers: shared hit=372
+Planning Time: 0.460 ms
+Execution Time: 9.614 ms
